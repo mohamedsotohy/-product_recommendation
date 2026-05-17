@@ -1,36 +1,17 @@
 from itertools import combinations
+from pathlib import Path
 
 import pandas as pd
-from sqlalchemy.orm import Session
 
 
 class RecommendationService:
-    def __init__(self):
+    def __init__(self, rules_path: str = "rules.csv"):
+        self.rules_path = Path(rules_path)
         self.rules_index = {"__max_antecedent_size__": 0}
 
-    def load_rules(
-        self,
-        db: Session,
-        job_name: str = "uci_product",
-        algorithm: str = "fp_growth",
-    ):
+    def load_rules(self):
 
-        query = """
-        SELECT *
-        FROM fact_recommendation_rules
-        WHERE job_name = :job_name
-        AND algorithm = :algorithm
-        """
-
-        rules = pd.read_sql_query(
-            query,
-            db.bind,
-            params={
-                "job_name": job_name,
-                "algorithm": algorithm,
-            },
-        )
-
+        rules = pd.read_csv(self.rules_path)
         self.rules_index = self.compile_rules(rules)
 
     def compile_rules(self, rules: pd.DataFrame):
@@ -77,33 +58,24 @@ class RecommendationService:
         input_list = sorted(input_set)
 
         max_size = min(
-            self.rules_index.get(
-                "__max_antecedent_size__",
-                0,
-            ),
+            self.rules_index.get("__max_antecedent_size__", 0),
             len(input_list),
         )
 
         for size in range(1, max_size + 1):
-            for antecedent_tuple in combinations(
-                input_list,
-                size,
-            ):
+            for antecedent_tuple in combinations(input_list, size):
                 antecedent = frozenset(antecedent_tuple)
 
-                for rule in self.rules_index.get(
-                    antecedent,
-                    [],
-                ):
+                for rule in self.rules_index.get(antecedent, []):
                     for item in rule["consequents"] - input_set:
                         if rule["score"] > scores.get(item, 0):
                             scores[item] = rule["score"]
 
                             evidence[item] = {
-                                "matched_antecedent": (rule["matched_antecedent"]),
-                                "confidence": (rule["confidence"]),
+                                "matched_antecedent": rule["matched_antecedent"],
+                                "confidence": rule["confidence"],
                                 "lift": rule["lift"],
-                                "support": (rule["support"]),
+                                "support": rule["support"],
                             }
 
         ranked = sorted(

@@ -18,14 +18,8 @@ app.add_middleware(
 def startup():
 
     db = SessionLocal()
-
     try:
-        recommender.load_rules(
-            db,
-            job_name="uci_product",
-            algorithm="fp_growth",
-        )
-
+        recommender.load_rules()
     finally:
         db.close()
 
