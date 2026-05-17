@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import axios from "axios";
 import {
   AppBar,
   Toolbar,
@@ -14,25 +15,65 @@ import {
   TableRow,
   Paper,
   Grid,
+  List,
+  ListItem,
+  ListItemText,
+  CircularProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate } from "react-router-dom";
 
 const CART_STORAGE_KEY = "cartItems";
+const RECOMMENDATIONS_ENDPOINT = import.meta.env.VITE_API_BASE_URL
+  ? `${import.meta.env.VITE_API_BASE_URL}/recommendations/`
+  : "http://localhost:8000/recommendations/";
 
 export default function Cart() {
   const navigate = useNavigate();
   const [cartItems, setCartItems] = useState([]);
+  const [submitStatus, setSubmitStatus] = useState("");
+  const [recommendations, setRecommendations] = useState([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [recommendationsError, setRecommendationsError] = useState("");
 
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || "[]");
     setCartItems(stored);
+
+    if (stored.length > 0) {
+      fetchRecommendations(stored);
+    }
   }, []);
 
-  const total = cartItems.reduce((sum, item) => {
-    const price = parseInt(item.price.replace("$", ""));
-    return sum + price * item.quantity;
-  }, 0);
+  const fetchRecommendations = async (items) => {
+    try {
+      setRecommendationsLoading(true);
+      setSubmitStatus("Fetching recommendations...");
+      const payload = {
+        cart_products: items.map((item) =>
+          String(
+            item.title ??
+              item.product_name ??
+              item.product_source_id ??
+              item.id,
+          ),
+        ),
+        top_k: 5,
+      };
+      console.log("Recommendation request payload:", payload);
+
+      const response = await axios.post(RECOMMENDATIONS_ENDPOINT, payload);
+      console.log("Recommendations response:", response);
+      setRecommendations(response.data.recommendations || []);
+      setSubmitStatus("Recommendations loaded.");
+    } catch (error) {
+      console.error("Error fetching recommendations:", error);
+      setRecommendationsError("Unable to load recommendations right now.");
+      setSubmitStatus(`Failed to fetch recommendations: ${error.message}`);
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  };
 
   return (
     <>
@@ -59,6 +100,15 @@ export default function Cart() {
               <Typography variant="h5" gutterBottom>
                 Your Cart
               </Typography>
+              {submitStatus && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 2 }}
+                >
+                  {submitStatus}
+                </Typography>
+              )}
               {cartItems.length === 0 ? (
                 <Box sx={{ textAlign: "center", py: 4 }}>
                   <Typography variant="h6" color="text.secondary">
@@ -72,22 +122,14 @@ export default function Cart() {
                       <TableHead>
                         <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
                           <TableCell>Product</TableCell>
-                          <TableCell align="right">Price</TableCell>
                           <TableCell align="right">Quantity</TableCell>
-                          <TableCell align="right">Subtotal</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {cartItems.map((item) => (
-                          <TableRow key={item.id}>
+                          <TableRow key={item.id ?? item.title}>
                             <TableCell>{item.title}</TableCell>
-                            <TableCell align="right">{item.price}</TableCell>
                             <TableCell align="right">{item.quantity}</TableCell>
-                            <TableCell align="right">
-                              $
-                              {parseInt(item.price.replace("$", "")) *
-                                item.quantity}
-                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -95,9 +137,6 @@ export default function Cart() {
                   </TableContainer>
 
                   <Box sx={{ mt: 3, textAlign: "right" }}>
-                    <Typography variant="h6">
-                      Total: <strong>${total}</strong>
-                    </Typography>
                     <Button
                       variant="contained"
                       color="primary"
@@ -121,9 +160,30 @@ export default function Cart() {
               <Typography variant="h5" gutterBottom>
                 Recommended for you
               </Typography>
-              <Typography color="text.secondary" sx={{ mt: 1 }}>
-                Recommendations will populate here from the API.
-              </Typography>
+              {recommendationsLoading ? (
+                <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+                  <CircularProgress />
+                </Box>
+              ) : recommendationsError ? (
+                <Typography color="error" sx={{ mt: 1 }}>
+                  {recommendationsError}
+                </Typography>
+              ) : recommendations.length === 0 ? (
+                <Typography color="text.secondary" sx={{ mt: 1 }}>
+                  No recommendations available for this cart yet.
+                </Typography>
+              ) : (
+                <List>
+                  {recommendations.map((rec, index) => (
+                    <ListItem key={`${rec.recommended_item}-${index}`}>
+                      <ListItemText
+                        primary={rec.recommended_item}
+                        secondary={`Score: ${rec.score.toFixed(2)}, Confidence: ${rec.confidence.toFixed(2)}`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
             </Paper>
           </Grid>
         </Grid>
