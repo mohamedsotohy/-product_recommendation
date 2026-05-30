@@ -205,7 +205,7 @@ export default function Home() {
       <AppBar position="static" color="primary" elevation={1}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Product Recommender
+            Home
           </Typography>
           <IconButton
             color="inherit"
